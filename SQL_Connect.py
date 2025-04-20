@@ -65,6 +65,10 @@ def getAUM(cik, accessionNumber, accessionNumberDash):
         return formatedAUM
     else:
         return (adjustedAUM, formatedAUM)
+"""
+def strip_namespace(xml_str):
+    return re.sub(r"</?ns\d*:", "<", xml_str).replace("</<", "</")
+"""
     
 def getHoldings(cik, accessionNumber, accessionNumberDash):
     url = f"https://www.sec.gov/Archives/edgar/data/{cik}/{accessionNumber}/{accessionNumberDash}.txt"
@@ -76,8 +80,49 @@ def getHoldings(cik, accessionNumber, accessionNumberDash):
         return None
     
     xmlSections = re.findall(r"<DOCUMENT>.*?</DOCUMENT>", response.text, re.DOTALL)
-    formatedContent = re.findall(r"infoTable>(.*?)</infoTable", xmlSections[1], re.DOTALL)
-    return formatedContent
+    formatedContent = re.findall(r"<(?:ns1:)?infoTable>(.*?)</(?:ns1:)?infoTable>", xmlSections[1], re.DOTALL)
+    parsedHoldings = []
+    for item in formatedContent:
+        xml_str = "<infoTable>" + item + "</infoTable>"
+        cleaned_xml = re.sub(r'<(/?)ns1:', r'<\1', xml_str)
+        root = ET.fromstring(cleaned_xml)
+
+        holding = {
+            "EquityName": root.findtext("nameOfIssuer"),
+            "Class": root.findtext("titleOfClass"),
+            "CUSIP": root.findtext("cusip"),
+            "Value": int(root.findtext("value")) * 1000,
+            "Shares": int(root.find("shrsOrPrnAmt/sshPrnamt").text),
+            "ShareType": root.find("shrsOrPrnAmt/sshPrnamtType").text,
+            "Discretion": root.findtext("investmentDiscretion"),
+            "VotingSole": int(root.find("votingAuthority/Sole").text),
+            "VotingShared": int(root.find("votingAuthority/Shared").text),
+            "VotingNone": int(root.find("votingAuthority/None").text),
+        }
+
+        parsedHoldings.append(holding)
+
+    df = pd.DataFrame(parsedHoldings)
+    return df
+
+def normalizeTitle(title):
+    t = title.upper()
+    if "CL A" in t:
+        return "Class A"
+    elif "CL B" in t:
+        return "Class B"
+    elif "COM" in t or t == "COMMON STOCK":
+        return "Common Stock"
+    elif "PFD" in t or "PREFERRED" in t:
+        return "Preferred"
+    elif "NOTE" in t or "BOND" in t or "PRN" in t:
+        return "Debt"
+    elif "W" in t or "WARRANT" in t:
+        return "Warrant"
+    elif "SHS" in t or t == "SH":
+        return "Common Stock"
+    else:
+        return "Other"
     
 # = pd.read_excel(r"C:\Users\willn\OneDrive\Documents\Asset_Managers.xlsx", engine = "openpyxl")
 #data = [tuple(x) for x in df[['Fund Name', 'CIK Number']].values]
