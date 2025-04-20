@@ -5,7 +5,7 @@ import xml.etree.ElementTree as ET
 import re
 
 def readTable():
-    connect = sqlite3.connect(r"C:\Users\willn\OneDrive\Documents\Asset_Managers.db")
+    connect = sqlite3.connect("Asset_Managers.db")
     df = pd.read_sql("SELECT * FROM AssetManagers", connect)
     connect.close()
     return df
@@ -25,6 +25,16 @@ def getFilings(cik):
     else:
         print(f"Error {response.status_code}: {response.text}")
         return None
+    
+def getAccessionNumberForDate(data, date):
+    for index, form in enumerate(data["filings"]["recent"]["form"]):
+        if form == "13F-HR" and data["filings"]["recent"]["reportDate"][index] == date:
+            accession_with_dashes = data["filings"]["recent"]["accessionNumber"][index]
+            accessionNumber = data["filings"]["recent"]["accessionNumber"][index].replace("-", "")
+            return accessionNumber, accession_with_dashes
+        if form == "13F-NT":
+            return "Filed under parent 13F"
+    return (None, None)
     
 def getAccessionNumber(data):
     for index, form in enumerate(data["filings"]["recent"]["form"]):
@@ -56,6 +66,19 @@ def getAUM(cik, accessionNumber, accessionNumberDash):
     else:
         return (adjustedAUM, formatedAUM)
     
+def getHoldings(cik, accessionNumber, accessionNumberDash):
+    url = f"https://www.sec.gov/Archives/edgar/data/{cik}/{accessionNumber}/{accessionNumberDash}.txt"
+
+    response = requests.get(url, headers = HEADERS, timeout = 10)
+
+    if response.status_code != 200:
+        print(f"Error {response.status_code}: {response.text}")
+        return None
+    
+    xmlSections = re.findall(r"<DOCUMENT>.*?</DOCUMENT>", response.text, re.DOTALL)
+    formatedContent = re.findall(r"infoTable>(.*?)</infoTable", xmlSections[1], re.DOTALL)
+    return formatedContent
+    
 # = pd.read_excel(r"C:\Users\willn\OneDrive\Documents\Asset_Managers.xlsx", engine = "openpyxl")
 #data = [tuple(x) for x in df[['Fund Name', 'CIK Number']].values]
 #for i, aum in enumerate(aumData, start=1):
@@ -84,12 +107,3 @@ dateList = ["At_2024_12_31", "At_2024_09_30", "At_2024_06_30", "At_2024_03_31",
             "At_2012_12_31", "At_2012_09_30", "At_2012_06_30", "At_2012_03_31",
             "At_2011_12_31", "At_2011_09_30", "At_2011_06_30", "At_2011_03_31",
             "At_2010_12_31", "At_2010_09_30", "At_2010_06_30", "At_2010_03_31"]
-
-data = readTable()
-for index, row in data.iterrows():
-    id = row['id']
-    fundName = row['Fund_Name']
-    cikNumber = row['CIK_Number']
-    cik = fixCIK(cikNumber)
-    print(cik)
-    #getFilings(cik)
