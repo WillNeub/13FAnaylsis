@@ -134,7 +134,7 @@ HEADERS = {
     "Accept": "application/json"
 }
 
-connect = sqlite3.connect(r"C:\Users\willn\OneDrive\Documents\Asset_Managers.db")
+connect = sqlite3.connect("Asset_Managers.db")
 cursor = connect.cursor()
 
 dateList = ["At_2024_12_31", "At_2024_09_30", "At_2024_06_30", "At_2024_03_31", 
@@ -152,3 +152,29 @@ dateList = ["At_2024_12_31", "At_2024_09_30", "At_2024_06_30", "At_2024_03_31",
             "At_2012_12_31", "At_2012_09_30", "At_2012_06_30", "At_2012_03_31",
             "At_2011_12_31", "At_2011_09_30", "At_2011_06_30", "At_2011_03_31",
             "At_2010_12_31", "At_2010_09_30", "At_2010_06_30", "At_2010_03_31"]
+
+
+new_cols = ["id", "FundName", "EquityName", "Class", "CUSIP", "Value", "Shares", "ShareType", "Discretion", "VotingSole", "VotingShared", "VotingNone"]
+
+def fix_sql_headers(dates):
+    for table in dates:
+        try:
+            cursor.execute(f"PRAGMA table_info({table})")
+            placeholders = ", ".join(["?"] * 12)
+            
+            cursor.execute(f"SELECT * FROM {table}")
+            data = cursor.fetchall()
+
+            cursor.execute(f"DROP TABLE {table}")
+
+            col_defs = ", ".join([f"{col} TEXT" for col in new_cols])
+            cursor.execute(f"CREATE TABLE {table} ({col_defs})")
+
+            insert_sql = f"INSERT INTO {table} VALUES ({placeholders})"
+            cursor.executemany(insert_sql, data)
+
+            print(f"✅ Replaced headers for {table}")
+        except Exception as e:
+            print(f"❌ Failed for {table}: {e}")
+
+# fix_sql_headers(dateList)
